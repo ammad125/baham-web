@@ -1,92 +1,39 @@
-import json
-from django.http import HttpResponse, HttpResponseRedirect, HttpResponseBadRequest, JsonResponse, QueryDict
+from django.http import HttpResponse, HttpResponseRedirect, HttpResponseBadRequest
 from django.template import loader
 from django.urls import reverse
-from django.contrib import auth
-from django.contrib.auth.models import User
-from django.db.models import Q
-from django.middleware.csrf import get_token
-
-from baham.enum_types import VehicleStatus, VehicleType
-from baham.models import Vehicle, VehicleModel, validate_colour
-
-
+from baham.enum_types import VehicleType
+from baham.models import VehicleModel
 # Create your views here.
-def render_login(request, message=None):
-    template = loader.get_template('login.html')
-    context = {
-        'message': message
-    }
-    return HttpResponse(template.render(context, request))
-
-
-def view_home(request):
-    if not request.user.is_authenticated:
-        return render_login(request)
+def view_home (request):
+    
     template = loader.get_template('home.html')
     context = {
-        'navbar': 'home',
-        'is_superuser': request.user.is_superuser,
+    'navbar': 'home',
     }
-    return HttpResponse(template.render(context, request))
+    return HttpResponse (template.render(context, request))
 
-
-def login(request):
-    _username = request.POST.get("username")
-    _username = _username.lower()
-    _password = request.POST.get("password")
-    user = User.objects.filter(Q(username=_username) | Q(email=_username)).first()
-    if not user:
-        return render_login(request, message='User not found. Please check the username/email.')
-    if user.check_password(_password):
-        auth.login(request, user)
-        return HttpResponseRedirect(reverse('home'))
-    return render_login(request, message='Invalid password!')
-
-
-def logout(request):
-    auth.logout(request)
-    return render_login(request, message='Invalid password!')
-
-
-def view_aboutus(request):
+def view_aboutus (request):
     template = loader.get_template('aboutus.html')
     context = {
-        'navbar': 'aboutus',
-        'is_superuser': request.user.is_superuser,
+    'navbar': 'aboutus',
     }
-    return HttpResponse(template.render(context, request))
-
-
-def view_vehicles(request):
-    limit = 20
+    return HttpResponse (template.render(context, request))
+def view_vehicles (request):
     template = loader.get_template('vehicles.html')
-    vehicles = Vehicle.objects.filter(Q(voided=0) & Q(status=VehicleStatus.AVAILABLE.name)).order_by('-date_created')[:limit]
+    vehicles = VehicleModel.objects.get(voided=False).order_by('vendor')
     context = {
-        'navbar': 'vehicles',
-        'is_superuser': request.user.is_superuser,
-        'vehicles': vehicles
+    'navbar': 'vehicles',
+    'vehicles': vehicles
     }
-    return HttpResponse(template.render(context, request))
+    return HttpResponse (template.render(context, request))
 
-
-def render_create_vehicle(request, message=None):
+def create_vehicle (request):
     template = loader.get_template('createvehicle.html')
-    models = VehicleModel.objects.filter(voided=0).order_by('vendor')
     context = {
-        'navbar': 'vehicles',
-        'is_superuser': request.user.is_superuser,
-        'models': models,
-        'vehicle_types': [(t.name, t.value) for t in VehicleType],
-        'vehicle_statuses': [(t.name, t.value) for t in VehicleStatus],
-        'message': message
+    'navbar': 'vehicles',
+    'vehicle_types': [(t.name, t.value) for t in VehicleType]
     }
-    return HttpResponse(template.render(context, request))
-
-
-def create_vehicle(request):
-    return render_create_vehicle(request)
-
+    return HttpResponse (template.render(context, request))
 
 def save_vehicle(request):
     _registration_number = request.POST.get('registration_number')
@@ -109,18 +56,14 @@ def save_vehicle(request):
     vehicle.save()
     return HttpResponseRedirect(reverse('vehicles'))
 
-
-def delete_vehicle(request, uuid):
-    if not request.user.is_staff:
-        return HttpResponseBadRequest('You are not authorized for this operation!')
-    vehicle_model = VehicleModel.objects.filter(uuid=uuid).first()
-    if not vehicle_model:
-        return HttpResponseBadRequest('This object does not exit!')
-    vehicle_model.delete()
-    return HttpResponseRedirect(reverse('vehicles'))
-
-
-def edit_vehicle(request, uuid):
+#activity-3
+def delete_vehicle_model(request):
+    vehicleModel = VehicleModel (vendor=_vendor, model=_model, type=_type, capacity=_capacity)
+    vehicleModel.void()
+    
+def delete_vehicle_model(request):
+    vehicleModel = VehicleModel (vendor=_vendor, model=_model, type=_type, capacity=_capacity)
+    vehicleModel.unvoid()def edit_vehicle(request, uuid):
     template = loader.get_template('editvehicle.html')
     vehicle_model = VehicleModel.objects.filter(uuid=uuid).first()
     if not vehicle_model:
@@ -261,3 +204,151 @@ def delete_vehicle_model(request, uuid):
         return JsonResponse(response_data, status=200)
     else:
         return JsonResponse({'error': 'Invalid endpoint or method type'}, status=400)
+
+
+
+        def get_all_user_profiles(request):
+    if request.method == 'GET':
+        users = UserProfile.objects.filter(voided=False)
+        if users:
+            data = []
+            for user in users:
+                data.append({
+                    'uuid': str(user.uuid),
+                    'birthdate': user.birthdate,
+                    'gender': user.gender,
+                    'type': user.type,
+                    'primary_contact': user.primary_contact,
+                    'address': user.address,
+                    'town': user.town,
+                    'bio': user.bio,
+                    'date_created': user.date_created,
+                    'created_by': str(user.created_by),
+                })
+            return JsonResponse({"results": data}, status=200)
+        else:
+            return JsonResponse({'error': 'User Profiles Not Found'}, status=404)
+    else:
+        return JsonResponse({'error': 'Invalid endpoint or method type'}, status=400)
+
+
+def get_user_profile(request, uuid):
+    if request.method == 'GET':
+        user_model = UserProfile.objects.filter(uuid=uuid, voided=False).first()
+        if user_model:
+            data = {
+                'uuid': str(user_model.uuid),
+                'birthdate': user_model.birthdate,
+                'gender': user_model.gender,
+                'type': user_model.type,
+                'primary_contact': user_model.primary_contact,
+                'address': user_model.address,
+                'town': user_model.town,
+                'bio': user_model.bio,
+                'date_created': user_model.date_created,
+                'created_by': str(user_model.created_by),
+            }
+            return JsonResponse({'results': data}, status=200)
+        else:
+            return JsonResponse({'error': 'User Profile Not Found'}, status=404)
+    else:
+        return JsonResponse({'error': 'Invalid endpoint or method type'}, status=400)
+
+
+def create_user_profile(request):
+    if request.method == 'POST':
+        _username = request.POST.get('username')
+        _pass = request.POST.get('pass')
+        _birthdate = request.POST.get('birthdate')
+        _gender = request.POST.get('gender')
+        _type = request.POST.get('type')
+        _primary_contact = request.POST.get('primary_contact')
+        _alternate_contact = request.POST.get('alternate_contact')
+        _address = request.POST.get('address')
+        _address_latitude = request.POST.get('address_latitude')
+        _address_longitude = request.POST.get('address_longitude')
+        _landmark = request.POST.get('landmark')
+        _town = request.POST.get('town')
+        _active = request.POST.get('active')
+        _bio = request.POST.get('bio')
+
+        user_profile = UserProfile.objects.create(
+            user=User.objects.create_user(username=_username, password=_pass),
+            birthdate=_birthdate,
+            gender=_gender,
+            type=_type,
+            primary_contact=_primary_contact,
+            alternate_contact=_alternate_contact,
+            address=_address,
+            address_latitude=_address_latitude,
+            address_longitude=_address_longitude,
+            landmark=_landmark,
+            town=_town,
+            active=_active,
+            bio=_bio,
+        )
+
+        response_data = {
+            'message': 'User profile created successfully',
+            'uuid': str(user_profile.uuid),
+        }
+        return JsonResponse(response_data, status=201)
+    else:
+        return JsonResponse({'error': 'Invalid endpoint or method type'}, status=400)
+
+
+def update_user_profile(request, uuid):
+    if request.method == 'PUT':
+        params = QueryDict(request.body)
+        _type = params.get('type')
+        _primary_contact = params.get('primary_contact')
+        _alternate_contact = params.get('alternate_contact')
+        _address = params.get('address')
+        _address_latitude = params.get('address_latitude')
+        _address_longitude = params.get('address_longitude')
+        _landmark = params.get('landmark')
+        _town = params.get('town')
+        _active = params.get('active')
+        user_profile = UserProfile.objects.filter(uuid=uuid, voided=False).first()
+        if not user_profile:
+            response_data = {
+                'error': 'User profile not found',
+            }
+            return JsonResponse(response_data, status=404)
+        user_profile.type = _type
+        user_profile.primary_contact = _primary_contact
+        user_profile.alternate_contact = _alternate_contact
+        user_profile.address = _address
+        user_profile.address_latitude = _address_latitude
+        user_profile.address_longitude = _address_longitude
+        user_profile.landmark = _landmark
+        user_profile.town = _town
+        user_profile.active = _active
+
+        user_profile.save()
+        response_data = {
+            'message': 'User profile updated successfully',
+            'uuid': str(user_profile.uuid),
+        }
+        return JsonResponse({"results": response_data}, status=200)
+    else:
+        return JsonResponse({'error': 'Invalid endpoint or method type'}, status=400)
+
+
+def delete_user_profile(request, uuid):
+    if request.method == 'DELETE':
+        user_profile = UserProfile.objects.filter(uuid=uuid, voided=False).first()
+        if not user_profile:
+            response_data = {
+                'error': 'User profile not found',
+            }
+            return JsonResponse(response_data, status=404)
+        user_profile.delete()
+        response_data = {
+            'message': 'User profile voided successfully'
+        }
+        return JsonResponse(response_data, status=200)
+    else:
+        return JsonResponse({'error': 'Invalid endpoint or method type'}, status=400)
+
+
